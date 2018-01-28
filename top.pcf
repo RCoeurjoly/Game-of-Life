@@ -1,5 +1,4 @@
-set_io dclk 21
-set_io clr 119
+set_io clk_12MHz 21
 set_io hsync 113
 set_io vsync 112
 set_io red 114
