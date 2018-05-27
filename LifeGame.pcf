@@ -1,7 +1,0 @@
-set_io dclk 21
-set_io clr 119
-set_io hsync 113
-set_io vsync 112
-set_io red 114
-set_io green 116
-set_io blue 118

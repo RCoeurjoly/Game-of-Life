@@ -18,7 +18,7 @@ module vga_controller(
    parameter ACTIVE_V_VIDEO = 480;
    parameter HFP = 32; 	// horizontal front porch length
    parameter H_PULSE = 48; 	// hsync pulse length
-   parameter HBP = 112; 	// horizontal back porch length
+   parameter HBP = 100; 	// horizontal back porch length
    parameter VFP = 1; 		// vertical front porch length
    parameter V_PULSE = 3; 	// vsync pulse length
    parameter VBP = 25; 	// vertical back porch length
