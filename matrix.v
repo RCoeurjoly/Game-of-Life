@@ -3,9 +3,14 @@ module matrix(
 	      input wire [9:0] y,
 	      output reg [2:0] rgb 	       
 	      );   
+
+
+   // The screen is 640 x 480 pixels
+   // We divide the screen in sprites of 32 x 32
+   // We get a screen composed of 20 x 15 sprites of 32 x 32 pixels each
    
-   parameter MAX_i = 1;
-   parameter MAX_j = 1;
+   parameter MAX_i = 3;
+   parameter MAX_j = 4;
    parameter [2:0] 	   BLACK = 3'b000;
    parameter [2:0] 	   BLUE = 3'b001;
    parameter [2:0] 	   GREEN = 3'b010;
@@ -24,31 +29,32 @@ module matrix(
    wire [4:0] 		       index_y = y[4:0];
    
    initial begin	 
-      for (i = 0; i < 3; i = i + 1) begin
+   /*   for (i = 0; i < 3; i = i + 1) begin
 	 screen[i]  <= 2'b01;
       end
-	 /*      
-       screen[1]  <= 20'b00010001111001000010;
-       screen[2]  <= 20'b00100001001000000000;
-       screen[3]  <= 20'b00101000000000000000;
-       screen[4]  <= 20'b00011110010000100001;
-       screen[5]  <= 20'b00000100001000100110;
-       screen[6]  <= 20'b00000100000000001000;
-       screen[7]  <= 20'b00100001001000100110;
-       screen[8]  <= 20'b00000000010000001000;
-       screen[9]  <= 20'b00010001000000000000;
-       screen[10] <= 20'b00100110010001001000;
-       screen[11] <= 20'b10000001000001100010;
-       screen[12] <= 20'b10000110000011000000;
-       screen[13] <= 20'b00100001110001000110;
-       screen[14] <= 20'b10000100000011100000;
-*/       
+*/	       
+       screen[1]  <= 3;
+       screen[2]  <= 3;
+       screen[3]  <= 3;
+       screen[4]  <= 3;
+       screen[5]  <= 3;
+       screen[6]  <= 3;
+       screen[7]  <= 3;
+       screen[8]  <= 3;
+       screen[9]  <= 3;
+       screen[10] <= 3;
+       screen[11] <= 3;
+       screen[12] <= 3;
+       screen[13] <= 3;
+       screen[14] <= 3;
+       
    end // initial begin
    
    always @(*) begin
-      if (sprite_x[0] ^ sprite_y[0] == 1)
+      if (screen[sprite_y][sprite_x] == 1)
 	rgb <= WHITE;
-      else rgb <= BLACK;
+      else
+	rgb <= BLACK;
    end // always @ (*)
-   
+  
 endmodule // matrix
