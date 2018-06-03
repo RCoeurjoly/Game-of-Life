@@ -9,8 +9,8 @@ module matrix(
    // We divide the screen in sprites of 32 x 32
    // We get a screen composed of 20 x 15 sprites of 32 x 32 pixels each
    
-   parameter MAX_i = 3;
-   parameter MAX_j = 4;
+   parameter MAX_i = 14;
+   parameter MAX_j = 19;
    parameter [2:0] 	   BLACK = 3'b000;
    parameter [2:0] 	   BLUE = 3'b001;
    parameter [2:0] 	   GREEN = 3'b010;
@@ -20,7 +20,7 @@ module matrix(
    parameter [2:0] 	   YELLOW = 3'b110;
    parameter [2:0] 	   WHITE = 3'b111;
 
-   reg [MAX_i : 0] 	       screen [MAX_j : 0];
+   reg [MAX_j : 0] 	       screen [MAX_i : 0];
    reg [4:0] 		       i, j;
    
    wire [4:0] 		       sprite_x = x[9:5];
@@ -28,31 +28,27 @@ module matrix(
    wire [4:0] 		       index_x = x[4:0];
    wire [4:0] 		       index_y = y[4:0];
    
-   initial begin	 
-   /*   for (i = 0; i < 3; i = i + 1) begin
-	 screen[i]  <= 2'b01;
-      end
-*/	       
-       screen[1]  <= 3;
-       screen[2]  <= 3;
-       screen[3]  <= 3;
-       screen[4]  <= 3;
-       screen[5]  <= 3;
-       screen[6]  <= 3;
-       screen[7]  <= 3;
-       screen[8]  <= 3;
-       screen[9]  <= 3;
-       screen[10] <= 3;
-       screen[11] <= 3;
-       screen[12] <= 3;
-       screen[13] <= 3;
-       screen[14] <= 3;
-       
-   end // initial begin
+   initial begin
+      screen[0]   <= 20'b00000000000000000000;
+      screen[1]   <= 20'b00000000000000000000;
+      screen[2]   <= 20'b00000000000000001000;
+      screen[3]   <= 20'b00000000000000010000;
+      screen[4]   <= 20'b00000111111111000000;
+      screen[5]   <= 20'b00000000010000001000;
+      screen[6]   <= 20'b00000000010000010000;
+      screen[7]   <= 20'b00000111111111000000;
+      screen[8]   <= 20'b00000000010000000000;
+      screen[9]   <= 20'b00000000010000001000;
+      screen[10]  <= 20'b00000111111111000100;
+      screen[11]  <= 20'b00000000000000000000;
+      screen[12]  <= 20'b00000000000000000000;
+      screen[13]  <= 20'b00000000000000000000;
+      screen[14]  <= 20'b00000000000000000000;
+   end
    
    always @(*) begin
       if (screen[sprite_y][sprite_x] == 1)
-	rgb <= WHITE;
+	rgb <= MAGENTA;
       else
 	rgb <= BLACK;
    end // always @ (*)
