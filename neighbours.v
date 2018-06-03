@@ -1,4 +1,8 @@
 //Where are the neighbours?
+
+module neighbours(
+		  );
+
    always @(posedge clk)
      begin
 	//limit cases
