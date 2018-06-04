@@ -43,4 +43,35 @@ First, it has to find where are the 8 neighbours of this data point.
 For each data point, there is a different set of neighbours.
 We want the screen to represent a sphere, so we join the corners together.
 
-The effect is that 
+The effect is that we have 4 edge cases and 4 corner cases in terms of calculating the neighbours.
+
+ ____________________________________
+|8_|_______________1______________|2_|
+|  |                              |  |
+|  |                              |  |
+|  |                              |  |
+|  |                              |  |
+|  |                              |  |
+|7 |               0              |3 |
+|  |                              |  |
+|  |                              |  |
+|  |                              |  |
+|  |                              |  |
+|  |                              |  |
+|__|______________________________|__|
+|6_|_______________5______________|4_|
+
+Normal case: 0
+Edge cases: 1, 3, 5 and 7
+Corner cases: 2, 4, 6 and 8
+
+The 8 neighbouring cells are called:
+
+Upper cell
+Upper right cell
+Right cell
+Lower right cell
+Lower cell
+Lower left cell
+Left cell
+Upper left cell
