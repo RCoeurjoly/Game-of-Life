@@ -18,6 +18,10 @@ This is a work in progress.
 
 ## Implementation:
 
+Problem:
+
+Verilog does not support two dimensional arrays as ports of modules. This feature is supported by SystemVerilog only.
+
 The screen is initialize with a pattern. This screen is passed to the screen updater, that creates the next screen with the current screen.
 
 The FSM for the screen updater is as follows:
