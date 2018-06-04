@@ -37,3 +37,10 @@ Then it inconditionally goes to UPDATE_NEXT_SCREEN state.
 
 How updating the next screen is done
 
+Each time the screen updater receives a new screen, it begins to update the next screen matrix.
+
+First, it has to find where are the 8 neighbours of this data point. 
+For each data point, there is a different set of neighbours.
+We want the screen to represent a sphere, so we join the corners together.
+
+The effect is that 
