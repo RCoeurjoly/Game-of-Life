@@ -65,6 +65,10 @@ The effect is that we have 4 edge cases and 4 corner cases in terms of calculati
 |__|______________________________|__|
 |6_|_______________5______________|4_|
 
+
++--+-------------------------------+--+
+|  |                               |  |
++--+-------------------------------+--+
 Normal case: 0
 Edge cases: 1, 3, 5 and 7
 Corner cases: 2, 4, 6 and 8
