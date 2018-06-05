@@ -74,19 +74,17 @@ The effect is that we have 4 edge cases and 4 corner cases in terms of calculati
 
 ```
 
-Normal case: 0
-
-Edge cases: 1, 3, 5 and 7
-
-Corner cases: 2, 4, 6 and 8
+-Normal case: 0
+-Edge cases: 1, 3, 5 and 7
+-Corner cases: 2, 4, 6 and 8
 
 The 8 neighbouring cells are called:
 
-Upper cell
-Upper right cell
-Right cell
-Lower right cell
-Lower cell
-Lower left cell
-Left cell
-Upper left cell
+-Upper cell
+-Upper right cell
+-Right cell
+-Lower right cell
+-Lower cell
+-Lower left cell
+-Left cell
+-Upper left cell
