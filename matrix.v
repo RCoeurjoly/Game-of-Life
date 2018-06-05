@@ -21,12 +21,15 @@ module matrix(
    parameter [2:0] 	   WHITE = 3'b111;
 
    reg [MAX_j : 0] 	       screen [MAX_i : 0];
+   reg [MAX_j : 0] 	       next_screen [MAX_i : 0];   
    reg [4:0] 		       i, j;
    
    wire [4:0] 		       sprite_x = x[9:5];
    wire [3:0] 		       sprite_y = y[8:5];
    wire [4:0] 		       index_x = x[4:0];
    wire [4:0] 		       index_y = y[4:0];
+   wire [19:0] 		       position = {x, y};		       
+
    
    initial begin
       screen[0]   <= 20'b00000000000000000000;
