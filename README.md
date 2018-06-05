@@ -60,7 +60,7 @@ The effect is that we have 4 edge cases and 4 corner cases in terms of calculati
 |   |                                        |   |
 |   |                                        |   |
 |   |                                        |   |
-| 7 |                                        | 3 |
+| 7 |                     0                  | 3 |
 |   |                                        |   |
 |   |                                        |   |
 |   |                                        |   |
@@ -69,13 +69,15 @@ The effect is that we have 4 edge cases and 4 corner cases in terms of calculati
 |   |                                        |   |
 |   |                                        |   |
 +---+----------------------------------------+---+
-| 6 |                    5                   | 4 |
+| 6 |                     5                  | 4 |
 +---+----------------------------------------+---+
 
 ```
 
 Normal case: 0
+
 Edge cases: 1, 3, 5 and 7
+
 Corner cases: 2, 4, 6 and 8
 
 The 8 neighbouring cells are called:
