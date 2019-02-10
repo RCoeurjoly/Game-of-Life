@@ -1,22 +1,3 @@
-//////////////////////////////////////////////////////////////////////////////////
-// Company:
-// Engineer:
-//
-// Create Date:    00:30:38 03/19/2013
-// Design Name:
-// Module Name:    LifeGame
-// Project Name:
-// Target Devices:
-// Tool versions:
-// Description:
-//
-// Dependencies:
-//
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-//
-//////////////////////////////////////////////////////////////////////////////////
 module rules(
 		input wire       clk,
 		input wire       clr, //asynchronous reset

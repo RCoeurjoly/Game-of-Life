@@ -46,7 +46,7 @@ module neighbours(
 		       lower_left_cell <= {y + 1,x - 1};
 		       left_cell <= {y,x - 1};
 		       upper_left_cell <= {MAX_j,x - 1};
-		    end // else: !if(x == MAX_i) 
+		    end // else: !if(x == MAX_i)
 	       end // if (y == 0)
 	     //right border cases
 	     else if (x == MAX_i)
@@ -74,7 +74,7 @@ module neighbours(
 		       lower_left_cell <= {y + 1,x - 1};
 		       left_cell <= {y,x - 1};
 		       upper_left_cell <= {y - 1,x - 1};
-		    end // if (y != 0)   
+		    end // if (y != 0)
 	       end // if (x == MAX_i)
 	     //lower border cases
 	     else if (y == MAX_j)
@@ -102,7 +102,7 @@ module neighbours(
 		       lower_left_cell <= {0,x - 1};
 		       left_cell <= {y,x - 1};
 		       upper_left_cell <= {y - 1,x - 1};
-		    end // if (x != MAX_i)   
+		    end // if (x != MAX_i)
 	       end // if (y == MAX_j)
 	     //regular left border case
 	     else //if (x == 0)
@@ -130,6 +130,6 @@ module neighbours(
 	     upper_left_cell <= {y - 1,x - 1};
 	  end // else: !if((y == 0) or (y == MAX_j) or (x == 0) or (x == MAX_i))
      end // always @ (x)
-	   
+
    wire [3:0] sum_neighbours;
    assign sum_neighbours = upper_cell + upper_right_cell + right_cell + lower_right_cell + lower_cell + lower_left_cell + left_cell + upper_left_cell;

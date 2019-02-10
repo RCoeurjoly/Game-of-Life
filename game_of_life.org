@@ -35,57 +35,15 @@
   |------+---+---+---+---+---+---+---+---+--------+---+---+---+---+---+---+---+---+---+-------|
   | LBC  |   |   |   |   |   |   |   |   | BOTTOM |   |   |   |   |   |   |   |   |   | RBC   |
 
+  In terms of modules, we are going to need the following:
+  - VGA controller: to print in the screen the content of the matrix
+  - 25MHz clock generator: to drive the pixel clock
+  - Matrix: hold the values of the current and the next matrix
+  - Neighbours: for a given cell, calculate the position of all 8 neighbours. This is needed because the neighbours in edge and corner cases
+  - Rules: decides what is the next state of a particular cell is
+  - Top: wires all the previous modules together
+
 * Design
-** Clock
-   This is the clock. We get the values of the PLL generator by running the following code:
- #+BEGIN_src shell
-icepll -i 12 -o 25
- #+end_src
-
- #+RESULTS:
- | F_PLLIN:      |   12.0 | MHz          | (given)     |
- | F_PLLOUT:     |   25.0 | MHz          | (requested) |
- | F_PLLOUT:     | 25.125 | MHz          | (achieved)  |
- | FEEDBACK:     | SIMPLE |              |             |
- | F_PFD:        |   12.0 | MHz          |             |
- | F_VCO:        |  804.0 | MHz          |             |
- | DIVR:         |      0 | (4'b0000)    |             |
- | DIVF:         |     66 | (7'b1000010) |             |
- | DIVQ:         |      5 | (3'b101)     |             |
- | FILTER_RANGE: |      1 | (3'b001)     |             |
-
-   #+BEGIN_SRC verilog :tangle rtl/clk_25MHz_generator.v
-// Copyright (c) 2017-2018 Roland Coeurjoly
-// This program is GPL Licensed. See LICENSE for the full license.
-
-module clk_25MHz_generator(
-			   input wire  i_clk_12MHz,
-			   output wire o_clk_25MHz
-			   );
-
-`ifndef SYNTHESIS
-   // SIMULATION
-   assign o_clk_25MHz = i_clk_12MHz;
-`else
-   // SYNTHESIS
-   SB_PLL40_CORE #(
-		   .FEEDBACK_PATH("SIMPLE"),
-		   .PLLOUT_SELECT("GENCLK"),
-		   .DIVR(4'b0001),
-		   .DIVF(7'b1000010),
-		   .DIVQ(3'b100),
-		   .FILTER_RANGE(3'b001),
-		   ) uut (
-			  .REFERENCECLK(i_clk_12MHz),
-			  .PLLOUTCORE(o_clk_25MHz),
-			  .RESETB(1'b1),
-			  .BYPASS(1'b0)
-			  );
-`endif
-
-endmodule
-
-   #+END_SRC
 ** VGA controller
    #+BEGIN_SRC verilog :tangle rtl/vga_controller.v
 // Copyright (c) 2017-2018 Roland Coeurjoly
@@ -193,218 +151,58 @@ module vga_controller(
    end // always @ (posedge i_clk_25MHz)
 endmodule
    #+END_SRC
-** Rules
-   #+BEGIN_SRC verilog :tangle rtl/rules.v
-//////////////////////////////////////////////////////////////////////////////////
-// Company:
-// Engineer:
-//
-// Create Date:    00:30:38 03/19/2013
-// Design Name:
-// Module Name:    LifeGame
-// Project Name:
-// Target Devices:
-// Tool versions:
-// Description:
-//
-// Dependencies:
-//
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-//
-//////////////////////////////////////////////////////////////////////////////////
-module rules(
-		input wire       clk,
-		input wire       clr, //asynchronous reset
-    input wire [4:0] sum_neighbours,
-		input wire [9:0] VGAx,
-		input wire [9:0] VGAy,
-		output reg [2:0] rgb
-		);
+** Clock
+   This is the clock. We get the values of the PLL generator by running the following code:
+ #+BEGIN_src shell
+icepll -i 12 -o 25
+ #+end_src
 
-   parameter MAX_j = 14;
-   parameter MAX_i = 19;
-   reg [0:MAX_i] screen [0:MAX_j];
-   reg [0:MAX_i] next_screen [0:MAX_j];
-   reg [9:0] 	 i;
-   reg [9:0] 	 j;
+ #+RESULTS:
+ | F_PLLIN:      |   12.0 | MHz          | (given)     |
+ | F_PLLOUT:     |   25.0 | MHz          | (requested) |
+ | F_PLLOUT:     | 25.125 | MHz          | (achieved)  |
+ | FEEDBACK:     | SIMPLE |              |             |
+ | F_PFD:        |   12.0 | MHz          |             |
+ | F_VCO:        |  804.0 | MHz          |             |
+ | DIVR:         |      0 | (4'b0000)    |             |
+ | DIVF:         |     66 | (7'b1000010) |             |
+ | DIVQ:         |      5 | (3'b101)     |             |
+ | FILTER_RANGE: |      1 | (3'b001)     |             |
 
-   wire [4:0] 			   x = VGAx[9:5];
-   wire [3:0] 			   y = VGAy[8:5];
+   #+BEGIN_SRC verilog :tangle rtl/clk_25MHz_generator.v
+// Copyright (c) 2017-2018 Roland Coeurjoly
+// This program is GPL Licensed. See LICENSE for the full license.
 
+module clk_25MHz_generator(
+			   input wire  i_clk_12MHz,
+			   output wire o_clk_25MHz
+			   );
 
-   //Rules of Conways's Game of Life
-   always @(*)
-     begin
-	      //if the cell is alive
-	      if (screen[y][x] == 1)
-	        begin
-	           case (sum_neighbours)
-	             //Any live cell with fewer than two live neighbours dies, as if caused by underpopulation.
-	             4'b0000, 4'b0001: next_screen[y][x] = 0;
-	             //Any live cell with two or three live neighbours lives on to the next generation.
-	             4'b0010, 4'b0011: next_screen[y][x] = 1;
-	             //Any live cell with more than three live neighbours dies, as if by overpopulation.
-	             default: next_screen[y][x] = 0;
-	           endcase
-	        end // if (screen[y][x] == 1)
-	      //if the cell is dead
-	      else
-	        begin
-	           case (sum_neighbours)
-	             //Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
-	             4'b0011: next_screen[y][x] = 1;
-	             default: next_screen[y][x] = 0;
-	           endcase // case (sum_neighbours)
-	        end // if (screen[y][x] == 0)
-     end
-endmodule
+`ifndef SYNTHESIS
+   // SIMULATION
+   assign o_clk_25MHz = i_clk_12MHz;
+`else
+   // SYNTHESIS
+   SB_PLL40_CORE #(
+		   .FEEDBACK_PATH("SIMPLE"),
+		   .PLLOUT_SELECT("GENCLK"),
+		   .DIVR(4'b0001),
+		   .DIVF(7'b1000010),
+		   .DIVQ(3'b100),
+		   .FILTER_RANGE(3'b001),
+		   ) uut (
+			  .REFERENCECLK(i_clk_12MHz),
+			  .PLLOUTCORE(o_clk_25MHz),
+			  .RESETB(1'b1),
+			  .BYPASS(1'b0)
+			  );
+`endif
 
-   #+END_SRC
-** Update screen
-   #+BEGIN_SRC verilog :tangle rtl/
-//////////////////////////////////////////////////////////////////////////////////
-// Company:
-// Engineer:
-//
-// Create Date:    00:30:38 03/19/2013
-// Design Name:
-// Module Name:    LifeGame
-// Project Name:
-// Target Devices:
-// Tool versions:
-// Description:
-//
-// Dependencies:
-//
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-//
-//////////////////////////////////////////////////////////////////////////////////
-module LifeGame(
-		input wire 	 clk,
-		input wire 	 clr, //asynchronous reset
-		input wire 	 vsync,
-		input wire [9:0] VGAx,
-		input wire [9:0] VGAy,
-		output reg [2:0] rgb
-		);
-
-   parameter MAX_j = 15;
-   parameter MAX_i = 19;
-   reg [0:MAX_i] screen [0:MAX_j];
-   reg [0:MAX_i] next_screen [0:MAX_j];
-   reg [0:4] 	 matrix [0:4];
-
-   reg [9:0] 	 i;
-   reg [9:0] 	 j;
-   reg upper_cell;
-   reg upper_right_cell;
-   reg right_cell;
-   reg lower_right_cell;
-   reg lower_cell;
-   reg lower_left_cell;
-   reg left_cell;
-   reg upper_left_cell;
-
-   wire [4:0] 			   x = VGAx[9:5];
-   wire [3:0] 			   y = VGAy[8:5];
-
-   /*initial begin
-   for (j = 0; j <= MAX_j; j = j + 1)
-     screen[j] <= j;
-     //screen[j] <= +{LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR};
-   end
-   /**/
-
-   //for simulation purposes
-   initial begin
-      matrix[0] <= 31;
-      matrix[1] <= 30;
-      matrix[2] <= 29;
-      matrix[3] <= 28;
-      upper_cell <= 0;
-      upper_right_cell <= 0;
-      right_cell <= 0;
-      lower_right_cell <= 0;
-      lower_cell <= 0;
-      lower_left_cell <= 0;
-      left_cell <= 0;
-      upper_left_cell <= 0;
-      rgb <= 0;
-      for (j = 0; j <= MAX_j; j = j + 1)
-	for (i = 0; i <= MAX_i; i = i + 1)
-	  if ((j == 1) && (i == 10))
-	    screen[j][i] <= 1;
-	  else if (((j== 5) && (i == 10)) || ((j== 4) && (i == 11)))
-	    screen[j][i] <= 1;
-	  else if (((j== 9) && (i == 10)) || ((j== 8) && (i == 11)) || ((j== 8) && (i == 9)))
-	    screen[j][i] <= 1;
-	  else if (((j== 13) && (i == 10)) || ((j== 12) && (i == 11)) || ((j== 12) && (i == 9)) || ((j== 12) && (i == 10)))
-	    screen[j][i] <= 1;
-	  else
-	    screen[j][i] <= 0;
-   end/**/
-
-   reg [7:0] LFSR = 8'b00101011;
-   wire feedback = LFSR[7] ^ LFSR[6:0];
-   /*
-   //always @(posedge clk)
-     initial begin
-	LFSR[0] <= feedback;
-	LFSR[1] <= LFSR[0];
-	LFSR[2] <= LFSR[1] ^ feedback;
-	LFSR[3] <= LFSR[2] ^ feedback;
-	LFSR[4] <= LFSR[3] ^ feedback;
-	LFSR[5] <= LFSR[4] ^ feedback;
-	LFSR[6] <= LFSR[5] ^ feedback;
-	LFSR[7] <= LFSR[6];
-     end
-    ,*/
-
-   //neighbour cells
-
-
-   //Sending rgb data to vga controller
-   always @(posedge clk)
-     begin
-	if (screen[y][x] == 1)
-	  begin
-	     rgb[2] <= screen[y][x];
-	     rgb[1] <= screen[y][x];
-	     rgb[0] <= screen[y][x];
-			       end
-	else
-	  begin
-	     rgb[2] <= 0;
-				  rgb[1] <= 0;
-	     rgb[0] <= 0;
-	  end // else: !if(clr == 1)
-     end // always @ begin
-   always @(posedge clk)
-     begin
-	if (vsync == 0)
-	  begin
-	     for (j = 0; j <= MAX_j; j=j +1)
-	       begin
-		  screen[j] <= next_screen[j];
-	       end
-	  end
-	else
-	  begin
-	     for (j = 0; j <= MAX_j; j=j +1)
-	       begin
-		  screen[j] <= screen[j];
-	       end
-	  end
-     end
 endmodule
 
    #+END_SRC
 ** Neighbours
-   #+BEGIN_SRC verilog
+   #+BEGIN_SRC verilog :tangle rtl/neighbours.v
 //Where are the neighbours?
 
 module neighbours(
@@ -542,49 +340,8 @@ module neighbours(
    assign sum_neighbours = upper_cell + upper_right_cell + right_cell + lower_right_cell + lower_cell + lower_left_cell + left_cell + upper_left_cell;
 
    #+END_SRC
-** Top
-   #+BEGIN_SRC verilog :tangle game_of_life_top.v
-module game_of_life_top(
-	                      input wire  i_clk_12MHz,
-	                      output wire o_hsync, //horizontal sync out
-	                      output wire o_vsync, //vertical sync out
-	                      output wire o_red, //red vga output
-	                      output wire o_green, //green vga output
-	                      outpu t wire o_blue //blue vga output
-	                      );
-
-   wire                             o_clk_25MHz;
-   wire [2:0]                       rgb;
-   wire [9:0]                       x, y;
-
-   clk_25MHz_generator clk_36MHz_generator1(
-					                                  .i_clk_12MHz(i_clk_12MHz),
-					                                  .o_clk_25MHz(o_clk_25MHz)
-					                                  );
-
-   vga_controller vga_controller1(
-				                          .i_clk_25MHz(o_clk_25MHz),
-				                          .rgb(rgb),
-				                          .hsync(hsync),
-				                          .vsync(vsync),
-				                          .o_red(o_red),
-				                          .o_green(o_green),
-				                          .o_blue(o_blue),
-				                          .x(x),
-				                          .y(y)
-				                          );
-
-   matrix matrix1(
-		              .x(x),
-		              .y(y),
-		              .rgb(rgb)
-		              );
-
-endmodule
-
-   #+END_SRC
 ** Matrix
-   #+BEGIN_SRC verilog
+   #+BEGIN_SRC verilog :tangle rtl/matrix.v
 module matrix(
 	            input wire [9:0] i_x,
 	            input wire [9:0] i_y,
@@ -607,8 +364,8 @@ module matrix(
    parameter [2:0] 	   YELLOW = 3'b110;
    parameter [2:0] 	   WHITE = 3'b111;
 
-   reg [MAX_j : 0]             screen [MAX_i : 0];
-   reg [MAX_j : 0]             next_screen [MAX_i : 0];
+   reg [MAX_j : 0]             screen [0 : MAX_i];
+   reg [MAX_j : 0]             next_screen [0 : MAX_i];
    reg [4:0]                   i, j;
 
    wire [4:0]                  sprite_x = i_x[9:5];
@@ -619,21 +376,7 @@ module matrix(
 
 
    initial begin
-      screen[0]   = 20'b00000000000000000000;
-      screen[1]   = 20'b00000000000000000000;
-      screen[2]   = 20'b00000000000000010000;
-      screen[3]   = 20'b00000000000000100000;
-      screen[4]   = 20'b00000011111110000000;
-      screen[5]   = 20'b00000000010000010000;
-      screen[6]   = 20'b00000000010000100000;
-      screen[7]   = 20'b00000011111110000000;
-      screen[8]   = 20'b00000000010000000000;
-      screen[9]   = 20'b00000000010000100000;
-      screen[10]  = 20'b00000011111110010000;
-      screen[11]  = 20'b00000000000000000000;
-      screen[12]  = 20'b00000000000000000000;
-      screen[13]  = 20'b00000000000000000000;
-      screen[14]  = 20'b00000000000000000000;
+      $readmemb("assets/initial_matrix.txt", screen);
    end
 
    always @(*) begin
@@ -645,9 +388,119 @@ module matrix(
 
 endmodule // matrix
    #+END_SRC
+*** Initial matrix
+    For convenience, we read a file for the initial state of cells
+    #+BEGIN_SRC verilog :tangle assets/initial_matrix.txt
+00000000000000000000
+00000000000000000000
+00000000000000010000
+00000000000000100000
+00000011111110000000
+00000000010000010000
+00000000010000100000
+00000011111110000000
+00000000010000000000
+00000000010000100000
+00000011111110010000
+00000000000000000000
+00000000000000000000
+00000000000000000000
+00000000000000000000
+    #+END_SRC
+** Rules
+   #+BEGIN_SRC verilog :tangle rtl/rules.v
+module rules(
+		input wire       clk,
+		input wire       clr, //asynchronous reset
+    input wire [4:0] sum_neighbours,
+		input wire [9:0] VGAx,
+		input wire [9:0] VGAy,
+		output reg [2:0] rgb
+		);
+
+   parameter MAX_j = 14;
+   parameter MAX_i = 19;
+   reg [0:MAX_i] screen [0:MAX_j];
+   reg [0:MAX_i] next_screen [0:MAX_j];
+   reg [9:0] 	 i;
+   reg [9:0] 	 j;
+
+   wire [4:0] 			   x = VGAx[9:5];
+   wire [3:0] 			   y = VGAy[8:5];
+
+
+   //Rules of Conways's Game of Life
+   always @(*)
+     begin
+	      //if the cell is alive
+	      if (screen[y][x] == 1)
+	        begin
+	           case (sum_neighbours)
+	             //Any live cell with fewer than two live neighbours dies, as if caused by underpopulation.
+	             4'b0000, 4'b0001: next_screen[y][x] = 0;
+	             //Any live cell with two or three live neighbours lives on to the next generation.
+	             4'b0010, 4'b0011: next_screen[y][x] = 1;
+	             //Any live cell with more than three live neighbours dies, as if by overpopulation.
+	             default: next_screen[y][x] = 0;
+	           endcase
+	        end // if (screen[y][x] == 1)
+	      //if the cell is dead
+	      else
+	        begin
+	           case (sum_neighbours)
+	             //Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
+	             4'b0011: next_screen[y][x] = 1;
+	             default: next_screen[y][x] = 0;
+	           endcase // case (sum_neighbours)
+	        end // if (screen[y][x] == 0)
+     end
+endmodule
+
+   #+END_SRC
+** Top
+   #+BEGIN_SRC verilog :tangle rtl/game_of_life_top.v
+module game_of_life_top(
+	                      input wire  i_clk_12MHz,
+	                      output wire o_hsync, //horizontal sync out
+	                      output wire o_vsync, //vertical sync out
+	                      output wire o_red, //red vga output
+	                      output wire o_green, //green vga output
+	                      output wire o_blue //blue vga output
+	                      );
+
+   wire                             clk_25MHz;
+   wire [2:0]                       rgb;
+   wire [9:0]                       x, y;
+
+   clk_25MHz_generator clk_36MHz_generator1(
+					                                  .i_clk_12MHz(i_clk_12MHz),
+					                                  .o_clk_25MHz(clk_25MHz)
+					                                  );
+
+   vga_controller vga_controller1(
+				                          .i_clk_25MHz(clk_25MHz),
+				                          .i_rgb(rgb),
+				                          .o_hsync(o_hsync),
+				                          .o_vsync(o_vsync),
+				                          .o_red(o_red),
+				                          .o_green(o_green),
+				                          .o_blue(o_blue),
+				                          .o_x(x),
+				                          .o_y(y)
+				                          );
+
+   matrix matrix1(
+		              .i_x(x),
+		              .i_y(y),
+		              .o_rgb(rgb)
+		              );
+
+endmodule
+
+   #+END_SRC
 * Constraints
   #+NAME constraints
-  #+BEGIN_SRC verilog :tangle syn/game_of_life.pcf
+  #+BEGIN_SRC verilog :tangle syn/game_of_life_top.pcf
 set_io i_clk_12MHz 21
 set_io o_hsync 113
 set_io o_vsync 112
@@ -672,11 +525,8 @@ endif
 ifeq ($(MODULE), $(TOP))
   DEPS:=\
     $(RTL_PATH)vga_controller.v \
-    $(RTL_PATH)neighbours.v \
-    $(RTL_PATH)rules.v \
-	$(RTL_PATH)invaders.v \
-	$(RTL_PATH)clk_25MHz_generator.v \
-	$(RTL_PATH)bullet.v
+		$(RTL_PATH)clk_25MHz_generator.v \
+		$(RTL_PATH)matrix.v
 
 FORMAL:=\
     ship.v \

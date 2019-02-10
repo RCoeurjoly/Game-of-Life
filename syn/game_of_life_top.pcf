@@ -1,0 +1,6 @@
+set_io i_clk_12MHz 21
+set_io o_hsync 113
+set_io o_vsync 112
+set_io o_red 119
+set_io o_green 118
+set_io o_blue 117
