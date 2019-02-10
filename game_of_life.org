@@ -43,6 +43,11 @@
   - Rules: decides what is the next state of a particular cell is
   - Top: wires all the previous modules together
 
+    With the neighbours we have to do several things.
+    - For a certain x and y, find where they are in the matrix
+    - Once all neighbours are located, get the state for all of them.
+    - Sum the value of all neighbours
+    - Decide what to do in the next state for that particular cell
 * Design
 ** VGA controller
    #+BEGIN_SRC verilog :tangle rtl/vga_controller.v
@@ -206,139 +211,145 @@ endmodule
 //Where are the neighbours?
 
 module neighbours(
-		  );
+                  input wire [9:0] i_x,
+	                input wire [9:0] i_y,
+	                output reg [3:0] o_sum
+		              );
 
-   always @(posedge clk)
-     begin
-	//limit cases
-	if ((y == 0) || (y == MAX_j) || (x == 0) || (x == MAX_i))
-	  begin
-	     //upper border cases
-	     if (y == 0)
-	       begin
-		  //upper left corner case
-		  if (x == 0)
-		    begin
-		       upper_cell <= {MAX_j,x};
-		       upper_right_cell <= {MAX_j,x + 1};
-		       right_cell <= {y,x + 1};
-		       lower_right_cell <= {y + 1,x + 1};
-		       lower_cell <= {y + 1,x};
-		       lower_left_cell <= {y + 1,MAX_i};
-		       left_cell <= {y,MAX_i};
-		       upper_left_cell <= {MAX_j,MAX_i};
-		    end // if (x == 0)
-		  //upper right corner case
-		  else if (x == MAX_i)
-		    begin
-		       upper_cell <= {MAX_j,x};
-		       upper_right_cell <= {MAX_j,x + 1};
-		       right_cell <= {y,x + 1};
-		       lower_right_cell <= {y + 1,x + 1};
-		       lower_cell <= {y + 1,x};
-		       lower_left_cell <= {y + 1,MAX_i};
-		       left_cell <= {y,MAX_i};
-		       upper_left_cell <= {MAX_j,MAX_i};
-		    end // if (x == MAX_i)
-		  // regular upper border case
-		  else
-		    begin
-		       upper_cell <= {MAX_j,x};
-		       upper_right_cell <= {MAX_j,x + 1};
-		       right_cell <= {y,x + 1};
-		       lower_right_cell <= {y + 1,x + 1};
-		       lower_cell <= {y + 1,x};
-		       lower_left_cell <= {y + 1,x - 1};
-		       left_cell <= {y,x - 1};
-		       upper_left_cell <= {MAX_j,x - 1};
-		    end // else: !if(x == MAX_i)
-	       end // if (y == 0)
-	     //right border cases
-	     else if (x == MAX_i)
-	       begin
-		  //lower right corner case
-		  if (y == MAX_j)
-		    begin
-		       upper_cell <= {y - 1,x};
-		       upper_right_cell <= {y + 1,0};
-		       right_cell <= {y,0};
-		       lower_right_cell <= {0,0};
-		       lower_cell <= {0,MAX_i};
-		       lower_left_cell <= {0,x - 1};
-		       left_cell <= {y,MAX_i};
-		       upper_left_cell <= {y,MAX_i};
-		    end // if (y == MAX_j)
-		  //regular right border case
-		  else //if (y != 0)
-		    begin
-		       upper_cell <= {y - 1,x};
-		       upper_right_cell <= {y - 1,0};
-		       right_cell <= {y,0};
-		       lower_right_cell <= {y + 1,0};
-		       lower_cell <= {y + 1,x};
-		       lower_left_cell <= {y + 1,x - 1};
-		       left_cell <= {y,x - 1};
-		       upper_left_cell <= {y - 1,x - 1};
-		    end // if (y != 0)
-	       end // if (x == MAX_i)
-	     //lower border cases
-	     else if (y == MAX_j)
-	       begin
-		  //lower left corner case
-		  if (x == 0)
-		    begin
-		       upper_cell <= {y - 1,x};
-		       upper_right_cell <= {y + 1,x + 1};
-		       right_cell <= {y,x + 1};
-		       lower_right_cell <= {y,x + 1};
-		       lower_cell <= {0,x};
-		       lower_left_cell <= {0,x - 1};
-		       left_cell <= {y,MAX_i};
-		       upper_left_cell <= {y - 1,MAX_i};
-		    end // if (x == 0)
-		  //regular lower border case
-		  else //if (x != MAX_i)
-		    begin
-		       upper_cell <= {y - 1,x};
-		       upper_right_cell <= {y - 1,x + 1};
-		       right_cell <= {y,x + 1};
-		       lower_right_cell <= {0,x + 1};
-		       lower_cell <= {0,x};
-		       lower_left_cell <= {0,x - 1};
-		       left_cell <= {y,x - 1};
-		       upper_left_cell <= {y - 1,x - 1};
-		    end // if (x != MAX_i)
-	       end // if (y == MAX_j)
-	     //regular left border case
-	     else //if (x == 0)
-	       begin
-		  upper_cell <= {y - 1,x};
-		  upper_right_cell <= {y - 1,x + 1};
-		  right_cell <= {y,x + 1};
-		  lower_right_cell <= {y + 1,x + 1};
-		  lower_cell <= {y + 1,x};
-		  lower_left_cell <= {y + 1,MAX_i};
-		  left_cell <= {y,MAX_i};
-		  upper_left_cell <= {y - 1,MAX_i};
-	       end // if (x == 0)
-	  end // if ((y == 0) or (y == MAX_j) or (x == 0) or (x == MAX_i))
-	//normal inner surface
-	else
-	  begin
-	     upper_cell <= {y - 1,x};
-	     upper_right_cell <= {y - 1,x + 1};
-	     right_cell <= {y,x + 1};
-	     lower_right_cell <= {y + 1,x + 1};
-	     lower_cell <= {y + 1,x};
-	     lower_left_cell <= {y + 1,x - 1};
-	     left_cell <= {y,x - 1};
-	     upper_left_cell <= {y - 1,x - 1};
-	  end // else: !if((y == 0) or (y == MAX_j) or (x == 0) or (x == MAX_i))
-     end // always @ (x)
+   parameter MAX_i = 14;
+   parameter MAX_j = 19;
+
+   always @(*) begin
+	    //limit cases
+	    if ((i_y == 0) || (i_y == MAX_j) || (i_x == 0) || (i_x == MAX_i))
+	      begin
+	         //upper border cases
+	         if (i_y == 0)
+	           begin
+		            //upper left corner case
+		            if (i_x == 0)
+		              begin
+		                 upper_cell <= {MAX_j,i_x};
+		                 upper_right_cell <= {MAX_j,i_x + 1};
+		                 right_cell <= {i_y,i_x + 1};
+		                 lower_right_cell <= {i_y + 1,i_x + 1};
+		                 lower_cell <= {i_y + 1,i_x};
+		                 lower_left_cell <= {i_y + 1,MAX_i};
+		                 left_cell <= {i_y,MAX_i};
+		                 upper_left_cell <= {MAX_j,MAX_i};
+		              end // if (i_x == 0)
+		            //upper right corner case
+		            else if (i_x == MAX_i)
+		              begin
+		                 upper_cell <= {MAX_j,i_x};
+		                 upper_right_cell <= {MAX_j,i_x + 1};
+		                 right_cell <= {i_y,i_x + 1};
+		                 lower_right_cell <= {i_y + 1,i_x + 1};
+		                 lower_cell <= {i_y + 1,i_x};
+		                 lower_left_cell <= {i_y + 1,MAX_i};
+		                 left_cell <= {i_y,MAX_i};
+		                 upper_left_cell <= {MAX_j,MAX_i};
+		              end // if (i_x == MAX_i)
+		            // regular upper border case
+		            else
+		              begin
+		                 upper_cell <= {MAX_j,i_x};
+		                 upper_right_cell <= {MAX_j,i_x + 1};
+		                 right_cell <= {i_y,i_x + 1};
+		                 lower_right_cell <= {i_y + 1,i_x + 1};
+		                 lower_cell <= {i_y + 1,i_x};
+		                 lower_left_cell <= {i_y + 1,i_x - 1};
+		                 left_cell <= {i_y,i_x - 1};
+		                 upper_left_cell <= {MAX_j,i_x - 1};
+		              end // else: !if(i_x == MAX_i)
+	           end // if (i_y == 0)
+	         //right border cases
+	         else if (i_x == MAX_i)
+	           begin
+		            //lower right corner case
+		            if (i_y == MAX_j)
+		              begin
+		                 upper_cell <= {i_y - 1,i_x};
+		                 upper_right_cell <= {i_y + 1,0};
+		                 right_cell <= {i_y,0};
+		                 lower_right_cell <= {0,0};
+		                 lower_cell <= {0,MAX_i};
+		                 lower_left_cell <= {0,i_x - 1};
+		                 left_cell <= {i_y,MAX_i};
+		                 upper_left_cell <= {i_y,MAX_i};
+		              end // if (i_y == MAX_j)
+		            //regular right border case
+		            else //if (i_y != 0)
+		              begin
+		                 upper_cell <= {i_y - 1,i_x};
+		                 upper_right_cell <= {i_y - 1,0};
+		                 right_cell <= {i_y,0};
+		                 lower_right_cell <= {i_y + 1,0};
+		                 lower_cell <= {i_y + 1,i_x};
+		                 lower_left_cell <= {i_y + 1,i_x - 1};
+		                 left_cell <= {i_y,i_x - 1};
+		                 upper_left_cell <= {i_y - 1,i_x - 1};
+		              end // if (i_y != 0)
+	           end // if (i_x == MAX_i)
+	         //lower border cases
+	         else if (i_y == MAX_j)
+	           begin
+		            //lower left corner case
+		            if (i_x == 0)
+		              begin
+		                 upper_cell <= {i_y - 1,i_x};
+		                 upper_right_cell <= {i_y + 1,i_x + 1};
+		                 right_cell <= {i_y,i_x + 1};
+		                 lower_right_cell <= {i_y,i_x + 1};
+		                 lower_cell <= {0,i_x};
+		                 lower_left_cell <= {0,i_x - 1};
+		                 left_cell <= {i_y,MAX_i};
+		                 upper_left_cell <= {i_y - 1,MAX_i};
+		              end // if (i_x == 0)
+		            //regular lower border case
+		            else //if (i_x != MAX_i)
+		              begin
+		                 upper_cell <= {i_y - 1,i_x};
+		                 upper_right_cell <= {i_y - 1,i_x + 1};
+		                 right_cell <= {i_y,i_x + 1};
+		                 lower_right_cell <= {0,i_x + 1};
+		                 lower_cell <= {0,i_x};
+		                 lower_left_cell <= {0,i_x - 1};
+		                 left_cell <= {i_y,i_x - 1};
+		                 upper_left_cell <= {i_y - 1,i_x - 1};
+		              end // if (i_x != MAX_i)
+	           end // if (i_y == MAX_j)
+	         //regular left border case
+	         else //if (i_x == 0)
+	           begin
+		            upper_cell <= {i_y - 1,i_x};
+		            upper_right_cell <= {i_y - 1,i_x + 1};
+		            right_cell <= {i_y,i_x + 1};
+		            lower_right_cell <= {i_y + 1,i_x + 1};
+		            lower_cell <= {i_y + 1,i_x};
+		            lower_left_cell <= {i_y + 1,MAX_i};
+		            left_cell <= {i_y,MAX_i};
+		            upper_left_cell <= {i_y - 1,MAX_i};
+	           end // if (i_x == 0)
+	      end // if ((i_y == 0) or (i_y == MAX_j) or (i_x == 0) or (i_x == MAX_i))
+	    //normal inner surface
+	    else
+	      begin
+	         upper_cell <= {i_y - 1,i_x};
+	         upper_right_cell <= {i_y - 1,i_x + 1};
+	         right_cell <= {i_y,i_x + 1};
+	         lower_right_cell <= {i_y + 1,i_x + 1};
+	         lower_cell <= {i_y + 1,i_x};
+	         lower_left_cell <= {i_y + 1,i_x - 1};
+	         left_cell <= {i_y,i_x - 1};
+	         upper_left_cell <= {i_y - 1,i_x - 1};
+	      end // else: !if((i_y == 0) or (i_y == MAX_j) or (i_x == 0) or (i_x == MAX_i))
+   end // always @ (i_x)
 
    wire [3:0] sum_neighbours;
    assign sum_neighbours = upper_cell + upper_right_cell + right_cell + lower_right_cell + lower_cell + lower_left_cell + left_cell + upper_left_cell;
 
+endmodule
    #+END_SRC
 ** Matrix
    #+BEGIN_SRC verilog :tangle rtl/matrix.v
@@ -381,9 +392,9 @@ module matrix(
 
    always @(*) begin
       if (screen[sprite_y][sprite_x] == 1)
-	      o_rgb = MAGENTA;
-      else
 	      o_rgb = BLACK;
+      else
+	      o_rgb = WHITE;
    end // always @ (*)
 
 endmodule // matrix
@@ -407,55 +418,62 @@ endmodule // matrix
 00000000000000000000
 00000000000000000000
     #+END_SRC
+
+    #+BEGIN_SRC shell
+echo "obase=2;243" | bc
+    #+END_SRC
+
+    #+RESULTS:
+    : 11110011
+
 ** Rules
    #+BEGIN_SRC verilog :tangle rtl/rules.v
 module rules(
-		input wire       clk,
-		input wire       clr, //asynchronous reset
-    input wire [4:0] sum_neighbours,
-		input wire [9:0] VGAx,
-		input wire [9:0] VGAy,
-		output reg [2:0] rgb
-		);
+             input wire [4:0]     sum_neighbours,
+		         input wire [9:0]     i_x,
+             input wire [0:MAX_i] i_screen [0:MAX_j],
+		         input wire [9:0]     i_y,
+		         output reg [2:0]     rgb
+		         );
 
    parameter MAX_j = 14;
    parameter MAX_i = 19;
-   reg [0:MAX_i] screen [0:MAX_j];
-   reg [0:MAX_i] next_screen [0:MAX_j];
-   reg [9:0] 	 i;
-   reg [9:0] 	 j;
+   reg [0:MAX_i]              screen [0:MAX_j];
+   reg [0:MAX_i]              next_screen [0:MAX_j];
+   reg [9:0]                  i;
+   reg [9:0]                  j;
 
-   wire [4:0] 			   x = VGAx[9:5];
-   wire [3:0] 			   y = VGAy[8:5];
+   wire [4:0]                 x = i_x[9:5];
+   wire [3:0]                 y = i_y[8:5];
 
 
    //Rules of Conways's Game of Life
-   always @(*)
-     begin
-	      //if the cell is alive
-	      if (screen[y][x] == 1)
-	        begin
-	           case (sum_neighbours)
-	             //Any live cell with fewer than two live neighbours dies, as if caused by underpopulation.
-	             4'b0000, 4'b0001: next_screen[y][x] = 0;
-	             //Any live cell with two or three live neighbours lives on to the next generation.
-	             4'b0010, 4'b0011: next_screen[y][x] = 1;
-	             //Any live cell with more than three live neighbours dies, as if by overpopulation.
-	             default: next_screen[y][x] = 0;
-	           endcase
-	        end // if (screen[y][x] == 1)
-	      //if the cell is dead
-	      else
-	        begin
-	           case (sum_neighbours)
-	             //Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
-	             4'b0011: next_screen[y][x] = 1;
-	             default: next_screen[y][x] = 0;
-	           endcase // case (sum_neighbours)
-	        end // if (screen[y][x] == 0)
-     end
+   always @(*) begin
+	    case (sum_neighbours)
+	      //Any live cell with fewer than two live neighbours dies, as if caused by underpopulation.
+	      4'b0000, 4'b0001: begin
+           //if the cell is alive
+	         if (screen[y][x] == 1) next_screen[y][x] = 0;
+        end
+	      //Any live cell with two or three live neighbours lives on to the next generation.
+	      4'b0010, 4'b0011: begin
+           if (screen[y][x] == 1) next_screen[y][x] = 1;
+        end
+	      //Any live cell with more than three live neighbours dies, as if by overpopulation.
+	      default: next_screen[y][x] = 0;
+	    endcase
+	 end // if (screen[y][x] == 1)
+	 //if the cell is dead
+else
+	begin
+	   case (sum_neighbours)
+	     //Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
+	     4'b0011: next_screen[y][x] = 1;
+	     default: next_screen[y][x] = 0;
+	   endcase // case (sum_neighbours)
+	end // if (screen[y][x] == 0)
+end
 endmodule
-
    #+END_SRC
 ** Top
    #+BEGIN_SRC verilog :tangle rtl/game_of_life_top.v
@@ -495,6 +513,10 @@ module game_of_life_top(
 		              .o_rgb(rgb)
 		              );
 
+   neighbours neighbours1(
+                          .i_x(x),
+		                      .i_y(y),
+                          );
 endmodule
 
    #+END_SRC

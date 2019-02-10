@@ -20,7 +20,7 @@ module matrix(
    parameter [2:0] 	   YELLOW = 3'b110;
    parameter [2:0] 	   WHITE = 3'b111;
 
-   reg [MAX_j : 0]             screen [MAX_i : 0];
+   reg [MAX_j : 0]             screen [0 : MAX_i];
    reg [MAX_j : 0]             next_screen [0 : MAX_i];
    reg [4:0]                   i, j;
 
@@ -37,9 +37,9 @@ module matrix(
 
    always @(*) begin
       if (screen[sprite_y][sprite_x] == 1)
-	      o_rgb = MAGENTA;
-      else
 	      o_rgb = BLACK;
+      else
+	      o_rgb = WHITE;
    end // always @ (*)
 
 endmodule // matrix
