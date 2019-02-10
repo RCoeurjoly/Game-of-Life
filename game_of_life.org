@@ -1,0 +1,750 @@
+* Introduction
+  The game of life is a no player game invented by British mathematician John Conway.
+  It consists of an array of cells that can be in one of two states: dead or alive.
+  The next state of a particular cells depends on the state of the surrounding cells.
+  More specifically, it follows the following rules:
+  - Any live cell with fewer than two live neighbours dies, as if caused by underpopulation.
+  - Any live cell with two or three live neighbours lives on to the next generation.
+	- Any live cell with more than three live neighbours dies, as if by overpopulation.
+  - Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
+* Architecture
+  We are going to implement the Game of Life in verilog. We are going to use only free software tools for all development, including synthesis and place and route.
+  We have a 640x480 screen.
+  Initially, the cell is going to be 32x32 pixels, but in the future we will try to make the cell as small as possible.
+  Therefore, the screen is going to look like this:
+  RBC = Right Bottom Corner
+  LBC = Right Bottom Corner
+  RTC = Right Bottom Corner
+  LTC = Right Bottom Corner
+
+  | LTC  |   |   |   |   |   |   |   |   | TOP    |   |   |   |   |   |   |   |   |   | RTC   |
+  |------+---+---+---+---+---+---+---+---+--------+---+---+---+---+---+---+---+---+---+-------|
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  | LEFT |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   | RIGHT |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |      |   |   |   |   |   |   |   |   |        |   |   |   |   |   |   |   |   |   |       |
+  |------+---+---+---+---+---+---+---+---+--------+---+---+---+---+---+---+---+---+---+-------|
+  | LBC  |   |   |   |   |   |   |   |   | BOTTOM |   |   |   |   |   |   |   |   |   | RBC   |
+
+* Design
+** Clock
+   This is the clock. We get the values of the PLL generator by running the following code:
+ #+BEGIN_src shell
+icepll -i 12 -o 25
+ #+end_src
+
+ #+RESULTS:
+ | F_PLLIN:      |   12.0 | MHz          | (given)     |
+ | F_PLLOUT:     |   25.0 | MHz          | (requested) |
+ | F_PLLOUT:     | 25.125 | MHz          | (achieved)  |
+ | FEEDBACK:     | SIMPLE |              |             |
+ | F_PFD:        |   12.0 | MHz          |             |
+ | F_VCO:        |  804.0 | MHz          |             |
+ | DIVR:         |      0 | (4'b0000)    |             |
+ | DIVF:         |     66 | (7'b1000010) |             |
+ | DIVQ:         |      5 | (3'b101)     |             |
+ | FILTER_RANGE: |      1 | (3'b001)     |             |
+
+   #+BEGIN_SRC verilog :tangle rtl/clk_25MHz_generator.v
+// Copyright (c) 2017-2018 Roland Coeurjoly
+// This program is GPL Licensed. See LICENSE for the full license.
+
+module clk_25MHz_generator(
+			   input wire  i_clk_12MHz,
+			   output wire o_clk_25MHz
+			   );
+
+`ifndef SYNTHESIS
+   // SIMULATION
+   assign o_clk_25MHz = i_clk_12MHz;
+`else
+   // SYNTHESIS
+   SB_PLL40_CORE #(
+		   .FEEDBACK_PATH("SIMPLE"),
+		   .PLLOUT_SELECT("GENCLK"),
+		   .DIVR(4'b0001),
+		   .DIVF(7'b1000010),
+		   .DIVQ(3'b100),
+		   .FILTER_RANGE(3'b001),
+		   ) uut (
+			  .REFERENCECLK(i_clk_12MHz),
+			  .PLLOUTCORE(o_clk_25MHz),
+			  .RESETB(1'b1),
+			  .BYPASS(1'b0)
+			  );
+`endif
+
+endmodule
+
+   #+END_SRC
+** VGA controller
+   #+BEGIN_SRC verilog :tangle rtl/vga_controller.v
+// Copyright (c) 2017-2018 Roland Coeurjoly
+// This program is GPL Licensed. See LICENSE for the full license.
+
+module vga_controller(
+		                  input wire       i_clk_25MHz,
+		                  input wire [2:0] i_rgb,
+		                  output wire      o_hsync, //horizontal sync out
+		                  output wire      o_vsync, //vertical sync out
+		                  output reg       o_red, //o_red vga output
+		                  output reg       o_green, //o_green vga output
+		                  output reg       o_blue, //o_blue vga output
+		                  output reg [9:0] o_x,
+		                  output reg [9:0] o_y
+		                  );
+
+   /**/
+   // video structure constants
+   parameter ACTIVE_H_VIDEO = 640;
+   parameter ACTIVE_V_VIDEO = 480;
+   parameter HFP = 16; 	// horizontal front porch length
+   parameter H_PULSE = 96; 	// hsync pulse length
+   parameter HBP = 48; 	// horizontal back porch length
+   parameter VFP = 10; 		// vertical front porch length
+   parameter V_PULSE = 2; 	// vsync pulse length
+   parameter VBP = 33; 	// vertical back porch length
+   parameter BLACK_H = HFP + H_PULSE + HBP;
+   parameter BLACK_V = VFP + V_PULSE + VBP;
+   parameter H_PIXELS = BLACK_H + ACTIVE_H_VIDEO;
+   parameter V_LINES = BLACK_V + ACTIVE_V_VIDEO;
+
+   // active horizontal video is therefore: 784 - 144 = 640
+   // active vertical video is therefore: 515 - 35 = 480
+
+   // registers for storing the horizontal & vertical counters
+   reg [9:0]                           h_counter;
+   reg [9:0]                           v_counter;
+
+
+   initial begin
+      o_x = 0;
+      o_y = 0;
+      o_red = 0;
+      o_green = 0;
+      o_blue = 0;
+      h_counter = 0;
+      v_counter = 0;
+   end
+   always @(posedge i_clk_25MHz)
+     begin
+	      // keep counting until the end of the line
+	      if (h_counter < H_PIXELS - 1)
+	        h_counter <= h_counter + 1;
+	      else
+	        // When we hit the end of the line, reset the horizontal
+	        // counter and increment the vertical counter.
+	        // If vertical counter is at the end of the frame, then
+	        // reset that one too.
+	        begin
+	           h_counter <= 0;
+	           if (v_counter < V_LINES - 1)
+	             v_counter <= v_counter + 1;
+	           else
+	             v_counter <= 0;
+	        end // else: !if(h_counters < H_PIXELS - 1)
+     end // always @ (posedge i_clk_25MHz)
+
+   // generate sync pulses (active low)
+   // ----------------
+   // "assign" statements are a quick way to
+   // give values to variables of type: wire
+
+   wire active_video;
+
+   assign o_hsync = (h_counter >= HFP && h_counter < HFP + H_PULSE) ? 0:1;
+   assign o_vsync = (v_counter >= VFP && v_counter < VFP + V_PULSE) ? 0:1;
+   assign active_video = (h_counter >= HFP + H_PULSE + HBP && v_counter >= VFP + V_PULSE + VBP) ? 1:0;
+
+
+   // displao_y 100% saturation colorbars
+   // ------------------------
+   // Combinational "always block", which is a block that is
+   // triggered when anything in the "sensitivity list" changes.
+   // The asterisk implies that everything that is capable of triggering the block
+   // is automatically included in the sensitivty list.  In this case, it would be
+   // equivalent to the following: always @(hc, vc)
+   // Assignment statements can only be used on type "reg" and should be of the "blocking" type: =
+
+   always @(posedge i_clk_25MHz) begin
+	    if (active_video == 1) begin
+	       o_red <= i_rgb[2];
+	       o_green <= i_rgb[1];
+	       o_blue <= i_rgb[0];
+	       o_x <= h_counter - HFP - H_PULSE - HBP;
+	       o_y <= v_counter - VFP - V_PULSE - VBP;
+	    end // if (active_video == 1)
+	    else begin
+	       o_red <= 0;
+	       o_green <= 0;
+	       o_blue <= 0;
+	       o_x <= 0;
+	       o_y <= 0;
+	    end // else: !if(active_video == 1)
+   end // always @ (posedge i_clk_25MHz)
+endmodule
+   #+END_SRC
+** Rules
+   #+BEGIN_SRC verilog :tangle rtl/rules.v
+//////////////////////////////////////////////////////////////////////////////////
+// Company:
+// Engineer:
+//
+// Create Date:    00:30:38 03/19/2013
+// Design Name:
+// Module Name:    LifeGame
+// Project Name:
+// Target Devices:
+// Tool versions:
+// Description:
+//
+// Dependencies:
+//
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+//
+//////////////////////////////////////////////////////////////////////////////////
+module rules(
+		input wire       clk,
+		input wire       clr, //asynchronous reset
+    input wire [4:0] sum_neighbours,
+		input wire [9:0] VGAx,
+		input wire [9:0] VGAy,
+		output reg [2:0] rgb
+		);
+
+   parameter MAX_j = 14;
+   parameter MAX_i = 19;
+   reg [0:MAX_i] screen [0:MAX_j];
+   reg [0:MAX_i] next_screen [0:MAX_j];
+   reg [9:0] 	 i;
+   reg [9:0] 	 j;
+
+   wire [4:0] 			   x = VGAx[9:5];
+   wire [3:0] 			   y = VGAy[8:5];
+
+
+   //Rules of Conways's Game of Life
+   always @(*)
+     begin
+	      //if the cell is alive
+	      if (screen[y][x] == 1)
+	        begin
+	           case (sum_neighbours)
+	             //Any live cell with fewer than two live neighbours dies, as if caused by underpopulation.
+	             4'b0000, 4'b0001: next_screen[y][x] = 0;
+	             //Any live cell with two or three live neighbours lives on to the next generation.
+	             4'b0010, 4'b0011: next_screen[y][x] = 1;
+	             //Any live cell with more than three live neighbours dies, as if by overpopulation.
+	             default: next_screen[y][x] = 0;
+	           endcase
+	        end // if (screen[y][x] == 1)
+	      //if the cell is dead
+	      else
+	        begin
+	           case (sum_neighbours)
+	             //Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
+	             4'b0011: next_screen[y][x] = 1;
+	             default: next_screen[y][x] = 0;
+	           endcase // case (sum_neighbours)
+	        end // if (screen[y][x] == 0)
+     end
+endmodule
+
+   #+END_SRC
+** Update screen
+   #+BEGIN_SRC verilog :tangle rtl/
+//////////////////////////////////////////////////////////////////////////////////
+// Company:
+// Engineer:
+//
+// Create Date:    00:30:38 03/19/2013
+// Design Name:
+// Module Name:    LifeGame
+// Project Name:
+// Target Devices:
+// Tool versions:
+// Description:
+//
+// Dependencies:
+//
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+//
+//////////////////////////////////////////////////////////////////////////////////
+module LifeGame(
+		input wire 	 clk,
+		input wire 	 clr, //asynchronous reset
+		input wire 	 vsync,
+		input wire [9:0] VGAx,
+		input wire [9:0] VGAy,
+		output reg [2:0] rgb
+		);
+
+   parameter MAX_j = 15;
+   parameter MAX_i = 19;
+   reg [0:MAX_i] screen [0:MAX_j];
+   reg [0:MAX_i] next_screen [0:MAX_j];
+   reg [0:4] 	 matrix [0:4];
+
+   reg [9:0] 	 i;
+   reg [9:0] 	 j;
+   reg upper_cell;
+   reg upper_right_cell;
+   reg right_cell;
+   reg lower_right_cell;
+   reg lower_cell;
+   reg lower_left_cell;
+   reg left_cell;
+   reg upper_left_cell;
+
+   wire [4:0] 			   x = VGAx[9:5];
+   wire [3:0] 			   y = VGAy[8:5];
+
+   /*initial begin
+   for (j = 0; j <= MAX_j; j = j + 1)
+     screen[j] <= j;
+     //screen[j] <= +{LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR, LFSR};
+   end
+   /**/
+
+   //for simulation purposes
+   initial begin
+      matrix[0] <= 31;
+      matrix[1] <= 30;
+      matrix[2] <= 29;
+      matrix[3] <= 28;
+      upper_cell <= 0;
+      upper_right_cell <= 0;
+      right_cell <= 0;
+      lower_right_cell <= 0;
+      lower_cell <= 0;
+      lower_left_cell <= 0;
+      left_cell <= 0;
+      upper_left_cell <= 0;
+      rgb <= 0;
+      for (j = 0; j <= MAX_j; j = j + 1)
+	for (i = 0; i <= MAX_i; i = i + 1)
+	  if ((j == 1) && (i == 10))
+	    screen[j][i] <= 1;
+	  else if (((j== 5) && (i == 10)) || ((j== 4) && (i == 11)))
+	    screen[j][i] <= 1;
+	  else if (((j== 9) && (i == 10)) || ((j== 8) && (i == 11)) || ((j== 8) && (i == 9)))
+	    screen[j][i] <= 1;
+	  else if (((j== 13) && (i == 10)) || ((j== 12) && (i == 11)) || ((j== 12) && (i == 9)) || ((j== 12) && (i == 10)))
+	    screen[j][i] <= 1;
+	  else
+	    screen[j][i] <= 0;
+   end/**/
+
+   reg [7:0] LFSR = 8'b00101011;
+   wire feedback = LFSR[7] ^ LFSR[6:0];
+   /*
+   //always @(posedge clk)
+     initial begin
+	LFSR[0] <= feedback;
+	LFSR[1] <= LFSR[0];
+	LFSR[2] <= LFSR[1] ^ feedback;
+	LFSR[3] <= LFSR[2] ^ feedback;
+	LFSR[4] <= LFSR[3] ^ feedback;
+	LFSR[5] <= LFSR[4] ^ feedback;
+	LFSR[6] <= LFSR[5] ^ feedback;
+	LFSR[7] <= LFSR[6];
+     end
+    ,*/
+
+   //neighbour cells
+
+
+   //Sending rgb data to vga controller
+   always @(posedge clk)
+     begin
+	if (screen[y][x] == 1)
+	  begin
+	     rgb[2] <= screen[y][x];
+	     rgb[1] <= screen[y][x];
+	     rgb[0] <= screen[y][x];
+			       end
+	else
+	  begin
+	     rgb[2] <= 0;
+				  rgb[1] <= 0;
+	     rgb[0] <= 0;
+	  end // else: !if(clr == 1)
+     end // always @ begin
+   always @(posedge clk)
+     begin
+	if (vsync == 0)
+	  begin
+	     for (j = 0; j <= MAX_j; j=j +1)
+	       begin
+		  screen[j] <= next_screen[j];
+	       end
+	  end
+	else
+	  begin
+	     for (j = 0; j <= MAX_j; j=j +1)
+	       begin
+		  screen[j] <= screen[j];
+	       end
+	  end
+     end
+endmodule
+
+   #+END_SRC
+** Neighbours
+   #+BEGIN_SRC verilog
+//Where are the neighbours?
+
+module neighbours(
+		  );
+
+   always @(posedge clk)
+     begin
+	//limit cases
+	if ((y == 0) || (y == MAX_j) || (x == 0) || (x == MAX_i))
+	  begin
+	     //upper border cases
+	     if (y == 0)
+	       begin
+		  //upper left corner case
+		  if (x == 0)
+		    begin
+		       upper_cell <= {MAX_j,x};
+		       upper_right_cell <= {MAX_j,x + 1};
+		       right_cell <= {y,x + 1};
+		       lower_right_cell <= {y + 1,x + 1};
+		       lower_cell <= {y + 1,x};
+		       lower_left_cell <= {y + 1,MAX_i};
+		       left_cell <= {y,MAX_i};
+		       upper_left_cell <= {MAX_j,MAX_i};
+		    end // if (x == 0)
+		  //upper right corner case
+		  else if (x == MAX_i)
+		    begin
+		       upper_cell <= {MAX_j,x};
+		       upper_right_cell <= {MAX_j,x + 1};
+		       right_cell <= {y,x + 1};
+		       lower_right_cell <= {y + 1,x + 1};
+		       lower_cell <= {y + 1,x};
+		       lower_left_cell <= {y + 1,MAX_i};
+		       left_cell <= {y,MAX_i};
+		       upper_left_cell <= {MAX_j,MAX_i};
+		    end // if (x == MAX_i)
+		  // regular upper border case
+		  else
+		    begin
+		       upper_cell <= {MAX_j,x};
+		       upper_right_cell <= {MAX_j,x + 1};
+		       right_cell <= {y,x + 1};
+		       lower_right_cell <= {y + 1,x + 1};
+		       lower_cell <= {y + 1,x};
+		       lower_left_cell <= {y + 1,x - 1};
+		       left_cell <= {y,x - 1};
+		       upper_left_cell <= {MAX_j,x - 1};
+		    end // else: !if(x == MAX_i)
+	       end // if (y == 0)
+	     //right border cases
+	     else if (x == MAX_i)
+	       begin
+		  //lower right corner case
+		  if (y == MAX_j)
+		    begin
+		       upper_cell <= {y - 1,x};
+		       upper_right_cell <= {y + 1,0};
+		       right_cell <= {y,0};
+		       lower_right_cell <= {0,0};
+		       lower_cell <= {0,MAX_i};
+		       lower_left_cell <= {0,x - 1};
+		       left_cell <= {y,MAX_i};
+		       upper_left_cell <= {y,MAX_i};
+		    end // if (y == MAX_j)
+		  //regular right border case
+		  else //if (y != 0)
+		    begin
+		       upper_cell <= {y - 1,x};
+		       upper_right_cell <= {y - 1,0};
+		       right_cell <= {y,0};
+		       lower_right_cell <= {y + 1,0};
+		       lower_cell <= {y + 1,x};
+		       lower_left_cell <= {y + 1,x - 1};
+		       left_cell <= {y,x - 1};
+		       upper_left_cell <= {y - 1,x - 1};
+		    end // if (y != 0)
+	       end // if (x == MAX_i)
+	     //lower border cases
+	     else if (y == MAX_j)
+	       begin
+		  //lower left corner case
+		  if (x == 0)
+		    begin
+		       upper_cell <= {y - 1,x};
+		       upper_right_cell <= {y + 1,x + 1};
+		       right_cell <= {y,x + 1};
+		       lower_right_cell <= {y,x + 1};
+		       lower_cell <= {0,x};
+		       lower_left_cell <= {0,x - 1};
+		       left_cell <= {y,MAX_i};
+		       upper_left_cell <= {y - 1,MAX_i};
+		    end // if (x == 0)
+		  //regular lower border case
+		  else //if (x != MAX_i)
+		    begin
+		       upper_cell <= {y - 1,x};
+		       upper_right_cell <= {y - 1,x + 1};
+		       right_cell <= {y,x + 1};
+		       lower_right_cell <= {0,x + 1};
+		       lower_cell <= {0,x};
+		       lower_left_cell <= {0,x - 1};
+		       left_cell <= {y,x - 1};
+		       upper_left_cell <= {y - 1,x - 1};
+		    end // if (x != MAX_i)
+	       end // if (y == MAX_j)
+	     //regular left border case
+	     else //if (x == 0)
+	       begin
+		  upper_cell <= {y - 1,x};
+		  upper_right_cell <= {y - 1,x + 1};
+		  right_cell <= {y,x + 1};
+		  lower_right_cell <= {y + 1,x + 1};
+		  lower_cell <= {y + 1,x};
+		  lower_left_cell <= {y + 1,MAX_i};
+		  left_cell <= {y,MAX_i};
+		  upper_left_cell <= {y - 1,MAX_i};
+	       end // if (x == 0)
+	  end // if ((y == 0) or (y == MAX_j) or (x == 0) or (x == MAX_i))
+	//normal inner surface
+	else
+	  begin
+	     upper_cell <= {y - 1,x};
+	     upper_right_cell <= {y - 1,x + 1};
+	     right_cell <= {y,x + 1};
+	     lower_right_cell <= {y + 1,x + 1};
+	     lower_cell <= {y + 1,x};
+	     lower_left_cell <= {y + 1,x - 1};
+	     left_cell <= {y,x - 1};
+	     upper_left_cell <= {y - 1,x - 1};
+	  end // else: !if((y == 0) or (y == MAX_j) or (x == 0) or (x == MAX_i))
+     end // always @ (x)
+
+   wire [3:0] sum_neighbours;
+   assign sum_neighbours = upper_cell + upper_right_cell + right_cell + lower_right_cell + lower_cell + lower_left_cell + left_cell + upper_left_cell;
+
+   #+END_SRC
+** Top
+   #+BEGIN_SRC verilog :tangle game_of_life_top.v
+module game_of_life_top(
+	                      input wire  i_clk_12MHz,
+	                      output wire o_hsync, //horizontal sync out
+	                      output wire o_vsync, //vertical sync out
+	                      output wire o_red, //red vga output
+	                      output wire o_green, //green vga output
+	                      outpu t wire o_blue //blue vga output
+	                      );
+
+   wire                             o_clk_25MHz;
+   wire [2:0]                       rgb;
+   wire [9:0]                       x, y;
+
+   clk_25MHz_generator clk_36MHz_generator1(
+					                                  .i_clk_12MHz(i_clk_12MHz),
+					                                  .o_clk_25MHz(o_clk_25MHz)
+					                                  );
+
+   vga_controller vga_controller1(
+				                          .i_clk_25MHz(o_clk_25MHz),
+				                          .rgb(rgb),
+				                          .hsync(hsync),
+				                          .vsync(vsync),
+				                          .o_red(o_red),
+				                          .o_green(o_green),
+				                          .o_blue(o_blue),
+				                          .x(x),
+				                          .y(y)
+				                          );
+
+   matrix matrix1(
+		              .x(x),
+		              .y(y),
+		              .rgb(rgb)
+		              );
+
+endmodule
+
+   #+END_SRC
+** Matrix
+   #+BEGIN_SRC verilog
+module matrix(
+	            input wire [9:0] i_x,
+	            input wire [9:0] i_y,
+	            output reg [2:0] o_rgb
+	            );
+
+
+   // The screen is 640 x 480 pixels
+   // We divide the screen in sprites of 32 x 32
+   // We get a screen composed of 20 x 15 sprites of 32 x 32 pixels each
+
+   parameter MAX_i = 14;
+   parameter MAX_j = 19;
+   parameter [2:0] 	   BLACK = 3'b000;
+   parameter [2:0] 	   BLUE = 3'b001;
+   parameter [2:0] 	   GREEN = 3'b010;
+   parameter [2:0] 	   CYAN = 3'b011;
+   parameter [2:0] 	   RED = 3'b100;
+   parameter [2:0] 	   MAGENTA = 3'b101;
+   parameter [2:0] 	   YELLOW = 3'b110;
+   parameter [2:0] 	   WHITE = 3'b111;
+
+   reg [MAX_j : 0]             screen [MAX_i : 0];
+   reg [MAX_j : 0]             next_screen [MAX_i : 0];
+   reg [4:0]                   i, j;
+
+   wire [4:0]                  sprite_x = i_x[9:5];
+   wire [3:0]                  sprite_y = i_y[8:5];
+   wire [4:0]                  index_x = i_x[4:0];
+   wire [4:0]                  index_y = i_y[4:0];
+   wire [19:0]                 position = {i_x, i_y};
+
+
+   initial begin
+      screen[0]   = 20'b00000000000000000000;
+      screen[1]   = 20'b00000000000000000000;
+      screen[2]   = 20'b00000000000000010000;
+      screen[3]   = 20'b00000000000000100000;
+      screen[4]   = 20'b00000011111110000000;
+      screen[5]   = 20'b00000000010000010000;
+      screen[6]   = 20'b00000000010000100000;
+      screen[7]   = 20'b00000011111110000000;
+      screen[8]   = 20'b00000000010000000000;
+      screen[9]   = 20'b00000000010000100000;
+      screen[10]  = 20'b00000011111110010000;
+      screen[11]  = 20'b00000000000000000000;
+      screen[12]  = 20'b00000000000000000000;
+      screen[13]  = 20'b00000000000000000000;
+      screen[14]  = 20'b00000000000000000000;
+   end
+
+   always @(*) begin
+      if (screen[sprite_y][sprite_x] == 1)
+	      o_rgb = MAGENTA;
+      else
+	      o_rgb = BLACK;
+   end // always @ (*)
+
+endmodule // matrix
+   #+END_SRC
+* Constraints
+  #+NAME constraints
+  #+BEGIN_SRC verilog :tangle syn/game_of_life.pcf
+set_io i_clk_12MHz 21
+set_io o_hsync 113
+set_io o_vsync 112
+set_io o_red 119
+set_io o_green 118
+set_io o_blue 117
+  #+END_SRC
+* Makefile
+#+BEGIN_SRC makefile :tangle Makefile
+# call with make MODULE=moduleName sim|svg|upload
+
+TOP:=game_of_life_top
+PROJECT_PATH:=~/Game-of-Life/
+FORMAL_PATH:=$(PROJECT_PATH)formal/
+RTL_PATH:=$(PROJECT_PATH)rtl/
+SIM_PATH:=$(PROJECT_PATH)sim/
+SYNTH_PATH:=$(PROJECT_PATH)syn/
+
+ifndef $(MODULE)
+	MODULE=$(TOP)
+endif
+ifeq ($(MODULE), $(TOP))
+  DEPS:=\
+    $(RTL_PATH)vga_controller.v \
+    $(RTL_PATH)neighbours.v \
+    $(RTL_PATH)rules.v \
+	$(RTL_PATH)invaders.v \
+	$(RTL_PATH)clk_25MHz_generator.v \
+	$(RTL_PATH)bullet.v
+
+FORMAL:=\
+    ship.v \
+    bullet.v
+#   AUXFILES:=\
+# 	const.vh
+
+# YOSYSOPT:=-retime -abc2
+endif
+
+ifndef $(MEMORY)
+	MEMORY="1k"
+endif
+
+all: bin
+bin: $(MODULE).bin
+sim: $(MODULE)_tb.vcd
+json: $(MODULE).json
+svg: assets/$(MODULE).svg
+
+
+$(MODULE)_tb.vcd: $(RTL_PATH)$(MODULE).v $(DEPS) $(SIM_PATH)$(MODULE)_tb.v  $(AUXFILES)
+
+	iverilog $^ -o $(MODULE)_tb.out
+	./$(MODULE)_tb.out
+	gtkwave $@ $(MODULE)_tb.gtkw &
+
+$(MODULE).bin: $(SYNTH_PATH)$(MODULE).pcf $(RTL_PATH)$(MODULE).v $(DEPS) $(AUXFILES)
+	yosys -p "synth_ice40 -blif $(MODULE).blif $(YOSYSOPT)" -l $(MODULE).log -q $(RTL_PATH)$(MODULE).v $(DEPS)
+	arachne-pnr -d $(MEMORY) -p $(SYNTH_PATH)$(MODULE).pcf $(MODULE).blif -o $(MODULE).pnr
+	icepack $(MODULE).pnr $(MODULE).bin
+
+$(MODULE).json: $(MODULE).v $(DEPS)
+	yosys -p "prep -top $(MODULE); write_json $(MODULE).json" (MODULE).v $(DEPS)
+
+assets/$(MODULE).svg: $(MODULE).json
+	netlistsvg $(MODULE).json -o assets/$(MODULE).svg
+
+upload: $(MODULE).bin
+	iceprog $(MODULE).bin
+
+clean:
+	rm -f *.bin *.pnr *.blif *.out *.vcd *~
+
+verify_bullet:
+	sby -f  $(FORMAL_PATH)bullet.sby
+verify_clk_25MHz_generator:
+	sby -f  $(FORMAL_PATH)clk_25MHz_generator.sby
+verify_edge_detector_debouncer:
+	sby -f  $(FORMAL_PATH)edge_detector_debouncer.sby
+verify_gameplay:
+	sby -f  $(FORMAL_PATH)gameplay.sby
+verify_invaders:
+	sby -f  $(FORMAL_PATH)invaders.sby
+verify_player:
+	sby -f  $(FORMAL_PATH)player.sby
+verify_ship:
+	sby -f  $(FORMAL_PATH)ship.sby
+verify_space_invaders_top:
+	sby -f  $(FORMAL_PATH)space_invaders_top.sby
+verify_sprite_drawer:
+	sby -f  $(FORMAL_PATH)sprite_drawer.sby
+verify_timer_1us:
+	sby -f  $(FORMAL_PATH)timer_1us.sby
+verify_tone_generator:
+	sby -f  $(FORMAL_PATH)tone_generator.sby
+verify_vga_controller:
+	sby -f  $(FORMAL_PATH)vga_controller.sby
+
+.PHONY: all clean json svg sim
+#+END_SRC
